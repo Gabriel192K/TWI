@@ -114,7 +114,7 @@ const uint8_t __TWI__::write(const uint8_t byte)
  */
 const uint8_t __TWI__::write(const uint8_t* bytes, const uint8_t size)
 {
-    for (uint8_t* p = bytes; p < (bytes + size); p++)
+    for (const uint8_t* p = bytes; p < (bytes + size); p++)
         if (!this->write(*p))
             return (0);
     return (1);
