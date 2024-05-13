@@ -57,6 +57,14 @@ void __TWI__::begin(const uint32_t frequency)
 }
 
 /*!
+ * @brief  Begins the TWI implementation using a default frequency
+ */
+void __TWI__::begin(void)
+{
+    this->begin(TWI_DEFAULT_FREQUENCY);
+}
+
+/*!
  * @brief  Setting the TWI bus communication frequency
  * @param  frequency
  *         The frequency of TWI bus communication
@@ -366,7 +374,7 @@ void __TWI__::isr(void)
             break;
         // MASTER RECEIVER
         case TW_MR_DATA_ACK:
-            this->buffer[this->bufferIndex++] = TWDR;
+            this->buffer[this->bufferIndex++] = *this->twdr;
             // No break needed
         case TW_MR_SLA_ACK:
             if(this->bufferIndex < this->bufferSize)
@@ -375,7 +383,7 @@ void __TWI__::isr(void)
                 *this->twcr = _BV(TWEN) | _BV(TWIE) | _BV(TWINT);
             break;
         case TW_MR_DATA_NACK:
-            this->buffer[this->bufferIndex++] = TWDR;
+            this->buffer[this->bufferIndex++] = *this->twdr;
             if (this->sendStop)
                 this->stop();
             else

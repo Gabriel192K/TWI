@@ -9,14 +9,15 @@
 #include <util/atomic.h>
 
 /* Macros */
-#define TWI_ROLE_MASTER (const uint8_t)0
-#define TWI_ROLE_SLAVE  (const uint8_t)1
-#define TWI_READY       (const uint8_t)0
-#define TWI_MRX         (const uint8_t)1
-#define TWI_MTX         (const uint8_t)2
-#define TWI_SRX         (const uint8_t)3
-#define TWI_STX         (const uint8_t)4
-#define TWI_BUFFER_SIZE (const uint8_t)32
+#define TWI_DEFAULT_FREQUENCY (const uint32_t)100000
+#define TWI_ROLE_MASTER       (const uint8_t)0
+#define TWI_ROLE_SLAVE        (const uint8_t)1
+#define TWI_READY             (const uint8_t)0
+#define TWI_MRX               (const uint8_t)1
+#define TWI_MTX               (const uint8_t)2
+#define TWI_SRX               (const uint8_t)3
+#define TWI_STX               (const uint8_t)4
+#define TWI_BUFFER_SIZE       (const uint8_t)32
 
 class __TWI__
 {
@@ -25,6 +26,7 @@ class __TWI__
         ~__TWI__();
         // MASTER
         void          begin            (const uint32_t frequency);
+        void          begin            (void);
         const uint8_t setFrequency     (const uint32_t frequency);
         const uint8_t beginTransmission(const uint8_t address);
         const uint8_t write            (const uint8_t byte);
