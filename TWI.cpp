@@ -32,12 +32,13 @@ __TWI__::~__TWI__()
  * @brief  Begins the TWI implementation using a fixed frequency
  * @param  frequency
  *         The frequency of TWI bus communication
+ * @return Returns 0 if already began TWI implementation, otherwise returns 1
  */
-void __TWI__::begin(const uint32_t frequency)
+const uint8_t __TWI__::begin(const uint32_t frequency)
 {
-    if (this->started)
-        return;
-    this->started = 1;
+    if (this->began)
+        return (0);
+    this->began = 1;
 
     this->role = TWI_ROLE_MASTER;
     this->state = TWI_READY;
@@ -50,10 +51,17 @@ void __TWI__::begin(const uint32_t frequency)
     PORTC = PORTC | ((1 << 4) | (1 << 5)); // Set <DOR> as <HIGH>
 
     this->setFrequency(frequency);
-    ATOMIC_BLOCK(ATOMIC_FORCEON)
-    {
-        *this->twcr = _BV(TWEN) | _BV(TWIE) | _BV(TWEA);
-    }
+    *this->twcr = _BV(TWEN) | _BV(TWIE) | _BV(TWEA);
+    return (1);
+}
+
+/*!
+ * @brief  Begins the TWI implementation using a default frequency
+ * @return Returns 0 if already began TWI implementation, otherwise returns 1
+ */
+const uint8_t __TWI__::begin(void)
+{
+    return (this->begin(TWI_DEFAULT_FREQUENCY));
 }
 
 /*!
@@ -282,9 +290,9 @@ const uint8_t __TWI__::read(void)
  */
 const uint8_t __TWI__::end(void)
 {
-    if (!this->started)
+    if (!this->began)
         return (0);
-    this->started = 0;
+    this->began = 0;
 
     DDRC = DDRC & ~((1 << 4) | (1 << 5));
     PORTC = PORTC & ~((1 << 4) | (1 << 5));
@@ -298,9 +306,9 @@ const uint8_t __TWI__::end(void)
 // Work in progress for TWI SLAVE
 void __TWI__::begin(const uint8_t address)
 {
-    if (this->started)
+    if (this->began)
         return;
-    this->started = 1;
+    this->began = 1;
 
     this->role = TWI_ROLE_SLAVE;
     this->address = address << 1;
@@ -366,7 +374,7 @@ void __TWI__::isr(void)
             break;
         // MASTER RECEIVER
         case TW_MR_DATA_ACK:
-            this->buffer[this->bufferIndex++] = TWDR;
+            this->buffer[this->bufferIndex++] = *this->twdr;
             // No break needed
         case TW_MR_SLA_ACK:
             if(this->bufferIndex < this->bufferSize)
@@ -375,7 +383,7 @@ void __TWI__::isr(void)
                 *this->twcr = _BV(TWEN) | _BV(TWIE) | _BV(TWINT);
             break;
         case TW_MR_DATA_NACK:
-            this->buffer[this->bufferIndex++] = TWDR;
+            this->buffer[this->bufferIndex++] = *this->twdr;
             if (this->sendStop)
                 this->stop();
             else
