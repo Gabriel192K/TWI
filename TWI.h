@@ -44,7 +44,6 @@ class __TWI__
         void          setTxCallback(void (*function)(void));
         // ALL
         void          isr         (void);
-        uint8_t buff[TWI_BUFFER_SIZE];
     private:
         /* General */
         volatile uint8_t* twbr;
