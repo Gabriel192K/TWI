@@ -65,6 +65,14 @@ const uint8_t __TWI__::begin(void)
 }
 
 /*!
+ * @brief  Begins the TWI implementation using a default frequency
+ */
+void __TWI__::begin(void)
+{
+    this->begin(TWI_DEFAULT_FREQUENCY);
+}
+
+/*!
  * @brief  Setting the TWI bus communication frequency
  * @param  frequency
  *         The frequency of TWI bus communication
