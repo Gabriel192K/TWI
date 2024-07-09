@@ -47,8 +47,8 @@ const uint8_t __TWI__::begin(const uint32_t frequency)
 
     // Use internall pullup of <SDA> and <SCL>
     // Not needed if external pullup's are inserted into the circuit
-    DDRC = DDRC & ~((1 << 4) | (1 << 5));  // Set <DDR> as <INPUT>
-    PORTC = PORTC | ((1 << 4) | (1 << 5)); // Set <DOR> as <HIGH>
+    // DDRC = DDRC & ~((1 << 4) | (1 << 5));  // Set <DDR> as <INPUT>
+    // PORTC = PORTC | ((1 << 4) | (1 << 5)); // Set <DOR> as <HIGH>
 
     this->setFrequency(frequency);
     *this->twcr = _BV(TWEN) | _BV(TWIE) | _BV(TWEA);

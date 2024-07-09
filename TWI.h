@@ -78,7 +78,7 @@ class __TWI__
 
 #if defined(__AVR_ATmega328P__) || \
     defined(__AVR_ATmega328PB__)
-    #define HAS_TWI
+    #define HAS_TWI0
     extern __TWI__ TWI;
 #endif
 

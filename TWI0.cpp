@@ -1,7 +1,7 @@
 /* Dependencies */
 #include "TWI.h"
 
-#if defined(HAS_TWI)
+#if defined(HAS_TWI0)
 
 #if defined(__AVR_ATmega328P__)
 __TWI__ TWI = __TWI__(&TWBR, &TWSR, &TWAR, &TWDR, &TWCR, &TWAMR);

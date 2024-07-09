@@ -3,7 +3,7 @@
 
 #if defined(HAS_TWI1)
 
-#elif defined(__AVR_ATmega328PB__)
+#if defined(__AVR_ATmega328PB__)
 __TWI__ TWI1 = __TWI__(&TWBR1, &TWSR1, &TWAR1, &TWDR1, &TWCR1, &TWAMR1);
 ISR(TWI1_vect)
 {
