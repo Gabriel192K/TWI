@@ -65,6 +65,26 @@ const uint8_t __TWI__::begin(void)
 }
 
 /*!
+ * @brief  Begins the TWI implementation as a slave
+ * @return Returns 0 if already began TWI implementation, otherwise returns 1
+ */
+const uint8_t __TWI__::begin(const uint8_t address)
+{
+    if (this->began)
+        return (0);
+    this->began = 1;
+
+    this->role = TWI_ROLE_SLAVE;
+    this->address = address << 1;
+    ATOMIC_BLOCK(ATOMIC_FORCEON)
+    {
+        *this->twar = this->address;
+        *this->twcr = _BV(TWEN) | _BV(TWIE) | _BV(TWEA);
+    }
+    return (1);
+}
+
+/*!
  * @brief  Setting the TWI bus communication frequency
  * @param  frequency
  *         The frequency of TWI bus communication
@@ -106,7 +126,7 @@ const uint8_t __TWI__::beginTransmission(const uint8_t address)
  */
 const uint8_t __TWI__::write(const uint8_t byte)
 {
-    if ((this->bufferSize + 1) >= TWI_BUFFER_SIZE)
+    if (this->bufferSize >= TWI_BUFFER_SIZE)
         return (0);
     this->buffer[this->bufferSize++] = byte;
     return (1);
@@ -303,23 +323,7 @@ const uint8_t __TWI__::end(void)
     return (1);
 }
 
-// Work in progress for TWI SLAVE
-void __TWI__::begin(const uint8_t address)
-{
-    if (this->began)
-        return;
-    this->began = 1;
-
-    this->role = TWI_ROLE_SLAVE;
-    this->address = address << 1;
-    ATOMIC_BLOCK(ATOMIC_FORCEON)
-    {
-        *this->twar = this->address;
-        *this->twcr = _BV(TWEN) | _BV(TWIE) | _BV(TWEA);
-    }
-}
-
-void __TWI__::setRxCallback(void (*function)(uint8_t*, const uint8_t))
+void __TWI__::setRxCallback(void (*function)(const uint8_t))
 {
     this->rxCallback = function;
 }
@@ -334,44 +338,46 @@ void __TWI__::isr(void)
 {
     switch (*this->twsr & 0xF8)
     {
-        // ALL MASTER
-        case TW_START:
-        case TW_REP_START:
-            *this->twdr = this->address;
-            *this->twcr = _BV(TWEN) | _BV(TWIE) | _BV(TWINT) | _BV(TWEA);
+        /* ALL MASTER */
+        case TW_START:                                                        // Start condition detected
+        case TW_REP_START:                                                    // Repeated start condition detected
+            *this->twdr = this->address;                                      // Read the address into TWDR
+            *this->twcr = _BV(TWEN) | _BV(TWIE) | _BV(TWINT) | _BV(TWEA);     // Send an ACK to master
             break;
-        // MASTER TRANSMITTER
-        case TW_MT_SLA_ACK:
-        case TW_MT_DATA_ACK:
-            if (this->bufferIndex < this->bufferSize)
+        
+        /* MASTER TRANSMITTER */
+        case TW_MT_SLA_ACK:                                                   // Addressed, returned ack
+        case TW_MT_DATA_ACK:                                                  // Data received, returned ack
+            if (this->bufferIndex < this->bufferSize)                         // If buffer index is within buffer size
             {
-                *this->twdr = this->buffer[this->bufferIndex++];
-                *this->twcr = _BV(TWEN) | _BV(TWIE) | _BV(TWINT) | _BV(TWEA);
+                *this->twdr = this->buffer[this->bufferIndex++];              // Write a byte into WTDR from buffer
+                *this->twcr = _BV(TWEN) | _BV(TWIE) | _BV(TWINT) | _BV(TWEA); // Send an ACK to master
             }
-            else
+            else                                                              // If no more data should be sent
             {
-                if (this->sendStop)
-                    this->stop();
-                else
+                if (this->sendStop)                                           // If a stop condition should be sent
+                    this->stop();                                             // Send a stop condition signal
+                else                                                          // If transmission should continue
                 {
-                    this->inRepStart = 1;
-                    *this->twcr = _BV(TWINT) | _BV(TWSTA)| _BV(TWEN);
-                    this->state = TWI_READY;
+                    this->inRepStart = 1;                                     // We're in repeated start now
+                    *this->twcr = _BV(TWINT) | _BV(TWSTA)| _BV(TWEN);         // Send a start condition signal
+                    this->state = TWI_READY;                                  // Now we are ready fro more transactions
                 }
             }
             break;
-        case TW_MT_SLA_NACK:
-            this->error = TW_MT_SLA_NACK;
-            this->stop();
+        case TW_MT_SLA_NACK:                                                  // Addressed, returned nack
+            this->error = TW_MT_SLA_NACK;                                     // Copy the status code as an error
+            this->stop();                                                     // Send a stop condition
             break;
-        case TW_MT_DATA_NACK:
-            this->error = TW_MT_DATA_NACK;
-            this->stop();
+        case TW_MT_DATA_NACK:                                                 // Data received, returned nack
+            this->error = TW_MT_DATA_NACK;                                    // Copy the status code as an error
+            this->stop();                                                     // Send a stop condition
             break;
-        case TW_MT_ARB_LOST:
-            this->error = TW_MT_ARB_LOST;
-            this->releaseBus();
+        case TW_MT_ARB_LOST:                                                  // Arbitration lost as master
+            this->error = TW_MT_ARB_LOST;                                     // Copy the status code as an error
+            this->releaseBus();                                               // Release the bus
             break;
+            
         // MASTER RECEIVER
         case TW_MR_DATA_ACK:
             this->buffer[this->bufferIndex++] = *this->twdr;
@@ -396,54 +402,57 @@ void __TWI__::isr(void)
         case TW_MR_SLA_NACK:
             this->stop();
             break;
-        // SLAVE RECEIVER
-        case TW_SR_SLA_ACK:   // addressed, returned ack
-        case TW_SR_GCALL_ACK: // addressed generally, returned ack
-        case TW_SR_ARB_LOST_SLA_ACK:   // lost arbitration, returned ack
-        case TW_SR_ARB_LOST_GCALL_ACK: // lost arbitration, returned ack
-            this->state = TWI_SRX;
-            this->slaveRxBufferIndex = 0;
-            *this->twcr = _BV(TWEN) | _BV(TWIE) | _BV(TWINT) | _BV(TWEA);
+
+        /* SLAVE RECEIVER */ 
+        case TW_SR_SLA_ACK:                                                   // Addressed, returned ack
+        case TW_SR_GCALL_ACK:                                                 // Addressed generally, returned ack
+        case TW_SR_ARB_LOST_SLA_ACK:                                          // Lost arbitration in slave addressing, returned ack
+        case TW_SR_ARB_LOST_GCALL_ACK:                                        // Lost arbitration in general call, returned ack
+            this->state = TWI_SRX;                                            // Set the state as slave RX
+            this->bufferIndex = 0;                                            // Reset the index
+            *this->twcr = _BV(TWEN) | _BV(TWIE) | _BV(TWINT) | _BV(TWEA);     // Send an ACK to master
             break;
-        case TW_SR_DATA_ACK:       // data received, returned ack
-        case TW_SR_GCALL_DATA_ACK: // data received generally, returned ack
-            if (this->slaveRxBufferIndex < TWI_BUFFER_SIZE)
+        case TW_SR_DATA_ACK:                                                  // Data received, returned ack
+        case TW_SR_GCALL_DATA_ACK:                                            // Data received generally, returned ack
+            if (this->bufferIndex < TWI_BUFFER_SIZE)                          // If buffer index is withing buffer size bounds
             {
-                this->slaveRxBuffer[this->slaveRxBufferIndex++] = *this->twdr;
-                *this->twcr = _BV(TWEN) | _BV(TWIE) | _BV(TWINT) | _BV(TWEA);
+                this->buffer[this->bufferIndex++] = *this->twdr;              // Read a byte from TWDR into buffer
+                *this->twcr = _BV(TWEN) | _BV(TWIE) | _BV(TWINT) | _BV(TWEA); // Send an ACK to master
             }
             else
-                *this->twcr = _BV(TWEN) | _BV(TWIE) | _BV(TWINT);
+                *this->twcr = _BV(TWEN) | _BV(TWIE) | _BV(TWINT);             // Send an NACK to master
             break;
-        case TW_SR_STOP: // stop or repeated start condition received
-            this->stop();
-            if (this->rxCallback != NULL)
-                this->rxCallback((uint8_t*)this->slaveRxBuffer, this->slaveRxBufferIndex);
-            this->releaseBus();
+        case TW_SR_STOP:                                                      // Stop or repeated start condition received
+            this->stop();                                                     // Send a stop condition signal
+            this->bufferSize = this->bufferIndex;                             // The size is where the index stopped
+            this->bufferIndex = 0;                                            // Now reset the index
+            if (this->rxCallback != NULL)                                     // If an RX callback function was registered
+                this->rxCallback(this->bufferIndex);                          // Call the RX callback function
+            this->releaseBus();                                               // Release the bus
             break;
-            PORTD ^= (1 << 2);
-        case TW_SR_DATA_NACK:
-        case TW_SR_GCALL_DATA_NACK:
-            *this->twcr = _BV(TWEN) | _BV(TWIE) | _BV(TWINT);
+        case TW_SR_DATA_NACK:                                                 // Data received, returned nack
+        case TW_SR_GCALL_DATA_NACK:                                           // Data received generally, returned nack
+            *this->twcr = _BV(TWEN) | _BV(TWIE) | _BV(TWINT);                 // Send an NACK to master
             break;
+
         // SLAVE TRANSMITTER
         case TW_ST_SLA_ACK:          // addressed, returned ack
         case TW_ST_ARB_LOST_SLA_ACK: // arbitration lost, returned ack
             this->state = TWI_STX;
-            this->slaveTxBufferIndex = 0;
-            this->slaveTxBufferSize = 0;
+            this->bufferIndex = 0;
+            this->bufferSize = 0;
             if (this->txCallback != NULL)
                 this->txCallback();
             
-            if(!this->slaveTxBufferSize)
+            if(!this->bufferSize)
             {
-                this->slaveTxBufferSize++;
-                this->slaveTxBuffer[0] = 0xFF;
+                this->bufferSize++;
+                this->buffer[0] = 0xFF;
             }
             // NO NEED FOR BRAKE
         case TW_ST_DATA_ACK:
-            *this->twdr = this->slaveTxBuffer[this->slaveTxBufferIndex++];
-            if (this->slaveTxBufferIndex < this->slaveTxBufferSize)
+            *this->twdr = this->buffer[this->bufferIndex++];
+            if (this->bufferIndex < this->bufferSize)
                 *this->twcr = _BV(TWEN) | _BV(TWIE) | _BV(TWINT) | _BV(TWEA);
             else
                 *this->twcr = _BV(TWEN) | _BV(TWIE) | _BV(TWINT);

@@ -24,9 +24,9 @@ class __TWI__
     public:
         __TWI__(volatile uint8_t* twbr, volatile uint8_t* twsr, volatile uint8_t* twar, volatile uint8_t* twdr, volatile uint8_t* twcr, volatile uint8_t* twamr);
         ~__TWI__();
-        // MASTER
         const uint8_t begin            (const uint32_t frequency);
         const uint8_t begin            (void);
+        const uint8_t begin            (const uint8_t address);
         const uint8_t setFrequency     (const uint32_t frequency);
         const uint8_t beginTransmission(const uint8_t address);
         const uint8_t write            (const uint8_t byte);
@@ -38,9 +38,7 @@ class __TWI__
         const uint8_t available        (void);
         const uint8_t read             (void);
         const uint8_t end              (void);
-        // SLAVE
-        void          begin        (const uint8_t address);
-        void          setRxCallback(void (*function)(uint8_t*, const uint8_t));
+        void          setRxCallback(void (*function)(const uint8_t));
         void          setTxCallback(void (*function)(void));
         // ALL
         void          isr         (void);
@@ -64,13 +62,8 @@ class __TWI__
         volatile uint8_t bufferSize;
         volatile uint8_t buffer[TWI_BUFFER_SIZE];
 
-        void (*rxCallback)(uint8_t* buffer, const uint8_t size);
+        void (*rxCallback)(const uint8_t size);
         void (*txCallback)();
-        volatile uint8_t slaveTxBuffer[TWI_BUFFER_SIZE];
-        volatile uint8_t slaveTxBufferIndex;
-        volatile uint8_t slaveTxBufferSize;
-        volatile uint8_t slaveRxBuffer[TWI_BUFFER_SIZE];
-        volatile uint8_t slaveRxBufferIndex;
 
         void releaseBus(void);
         void stop(void);
