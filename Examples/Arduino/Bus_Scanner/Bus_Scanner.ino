@@ -26,12 +26,19 @@ void loop(void)
         const uint8_t status = TWI.endTransmission();
         switch (status)
         {
-            case 0:
-                terminal.print("MCU not configured as TWI master\n");
-                break;
-            case 1:
+            case TW_MT_SLA_ACK:
                 terminal.print("TWI device found at address: 0x");
                 terminal.println(address, HEX);
+                numOfDevices++;
+                break;
+            case TW_MT_ARB_LOST:
+                terminal.print("TWI arbitration lost\n");
+                break;
+            case TW_BUS_ERROR:
+                terminal.print("TWI bus error detected\n");
+                break;
+            case TW_NO_INFO:
+                terminal.print("TWI bus no info\n");
                 break;
         }
     }

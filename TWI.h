@@ -7,6 +7,7 @@
 #include <avr/interrupt.h>
 #include <util/twi.h>
 #include <util/atomic.h>
+#include <util/delay.h>
 
 /* Macros */
 #define TWI_DEFAULT_FREQUENCY (const uint32_t)400000
@@ -18,6 +19,17 @@
 #define TWI_SRX               (const uint8_t)3
 #define TWI_STX               (const uint8_t)4
 #define TWI_BUFFER_SIZE       (const uint8_t)32
+#define TWI_BEGIN             ((1 << TWEN) | (1 << TWIE) | (1 << TWEA))
+#define TWI_SEND_ACK          ((1 << TWEN) | (1 << TWIE) | (1 << TWINT) | (1 << TWEA))
+#define TWI_SEND_NACK         ((1 << TWEN) | (1 << TWIE) | (1 << TWINT))
+#define TWI_SEND_START        ((1 << TWEN) | (1 << TWIE) | (1 << TWINT) | (1 << TWEA) | (1 << TWSTA))
+#define TWI_SEND_REP_START    ((1 << TWEN) | (1 << TWINT) | (1 << TWSTA))
+#define TWI_SEND_STOP         ((1 << TWEN) | (1 << TWIE) | (1 << TWINT) | (1 << TWEA) | (1 << TWSTO))
+#define TWI_END               (const uint8_t)0x00
+
+#define TWI_BEGIN             _BV(TWEN) | _BV(TWIE) | _BV(TWEA)
+#define TWI_START_CONDITION   _BV(TWINT) | _BV(TWEA) | _BV(TWEN) | _BV(TWIE) | _BV(TWSTA)
+#define TWI_REP_START         _BV(TWINT) | _BV(TWEA) | _BV(TWEN) | _BV(TWIE)
 
 class __TWI__
 {
@@ -38,10 +50,10 @@ class __TWI__
         const uint8_t available        (void);
         const uint8_t read             (void);
         const uint8_t end              (void);
-        void          setRxCallback(void (*function)(const uint8_t));
-        void          setTxCallback(void (*function)(void));
-        // ALL
-        void          isr         (void);
+        void          setRxCallback    (void (*function)(const uint8_t));
+        void          setTxCallback    (void (*function)(void));
+        const uint8_t getStatus        (void);
+        void          isr              (void);
     private:
         /* General */
         volatile uint8_t* twbr;
@@ -56,7 +68,7 @@ class __TWI__
         volatile uint8_t state;
         volatile uint8_t sendStop;
         volatile uint8_t inRepStart;
-        volatile uint8_t error;
+        volatile uint8_t status;
         volatile uint8_t address;
         volatile uint8_t bufferIndex;
         volatile uint8_t bufferSize;
