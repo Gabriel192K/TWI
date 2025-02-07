@@ -1,9 +1,21 @@
 #include "TWI.h"
 
-/*!
- * @brief  __TWI__ constructor
- * @param  TWBR, TWSR, TWAR, TWDR, TWCR, TWAMR
- *         The TWI registers
+/**
+ * @brief Constructor for the __TWI__ class.
+ * 
+ * This constructor initializes the __TWI__ object with the addresses of the TWI (I2C)
+ * control registers. These registers are used to configure and control the I2C peripheral
+ * for communication on the bus.
+ * 
+ * @param twbr Pointer to the TWI Bit Rate Register (TWBR).
+ * @param twsr Pointer to the TWI Status Register (TWSR).
+ * @param twar Pointer to the TWI Address Register (TWAR).
+ * @param twdr Pointer to the TWI Data Register (TWDR).
+ * @param twcr Pointer to the TWI Control Register (TWCR).
+ * @param twamr Pointer to the TWI Address Mask Register (TWAMR).
+ * 
+ * This constructor sets up the internal pointers to the TWI registers, allowing
+ * the class to access and modify them for managing I2C operations.
  */
 __TWI__::__TWI__(volatile uint8_t* twbr, volatile uint8_t* twsr, volatile uint8_t* twar, volatile uint8_t* twdr, volatile uint8_t* twcr, volatile uint8_t* twamr)
 {
@@ -15,8 +27,17 @@ __TWI__::__TWI__(volatile uint8_t* twbr, volatile uint8_t* twsr, volatile uint8_
     this->twamr = twamr;
 }
 
-/*!
- * @brief  __TWI__ Destructor
+
+/**
+ * @brief Destructor for the __TWI__ class.
+ * 
+ * This destructor resets the internal pointers to the TWI (I2C) control registers 
+ * by setting them to NULL. It ensures that the TWI interface is properly cleaned up 
+ * when the __TWI__ object is destroyed, preventing any unintended access to the 
+ * control registers after the object goes out of scope.
+ * 
+ * @note The destructor does not affect the hardware registers themselves, but only 
+ * the internal pointers in the class.
  */
 __TWI__::~__TWI__()
 {
@@ -28,268 +49,368 @@ __TWI__::~__TWI__()
     this->twamr = NULL;
 }
 
-/*!
- * @brief  Begins the TWI implementation using a fixed frequency
- * @param  frequency
- *         The frequency of TWI bus communication
- * @return Returns 0 if already began TWI implementation, otherwise returns 1
+
+/**
+ * @brief Initializes the TWI (I2C) interface in master mode.
+ * 
+ * This function configures the TWI interface to operate as a master and sets the 
+ * communication frequency. It also ensures that the internal state of the TWI 
+ * interface is properly initialized and ready for communication.
+ * 
+ * @param frequency The desired I2C communication frequency (in Hz). The default 
+ *                  value is 400kHz (standard for high-speed I2C).
+ * 
+ * @return `1` if the initialization was successful, `0` if the TWI interface 
+ *         was already initialized.
  */
 const uint8_t __TWI__::begin(const uint32_t frequency)
 {
-    if (this->began)
-        return (0);
-    this->began = 1;
+    if (this->began)  /**< Check if the TWI interface has already been initialized. */
+        return (0);  /**< Return 0 if already initialized. */
 
-    this->role = TWI_ROLE_MASTER;
-    this->state = TWI_READY;
-    this->sendStop = 1;
-    this->inRepStart = 0;
+    this->began = 1;  /**< Mark the interface as initialized. */
 
-    // Use internall pullup of <SDA> and <SCL>
-    // Not needed if external pullup's are inserted into the circuit
-    // DDRC = DDRC & ~((1 << 4) | (1 << 5));  // Set <DDR> as <INPUT>
-    // PORTC = PORTC | ((1 << 4) | (1 << 5)); // Set <DOR> as <HIGH>
+    this->role = TWI_ROLE_MASTER;  /**< Set the role to master. */
+    this->state = TWI_READY;  /**< Set the state to 'ready'. */
+    this->sendStop = 1;  /**< Enable sending STOP after communication. */
+    this->inRepStart = 0;  /**< Reset the repeated start flag. */
 
-    this->setFrequency(frequency);
-    ATOMIC_BLOCK(ATOMIC_FORCEON)
-        *this->twcr = TWI_BEGIN;
-    return (1);
+    this->setFrequency(frequency);  /**< Set the I2C frequency. */
+
+    ATOMIC_BLOCK(ATOMIC_FORCEON)  /**< Begin atomic block to prevent interrupt interference. */
+        *this->twcr = TWI_BEGIN;  /**< Set the control register to start TWI communication. */
+
+    return (1);  /**< Return 1 to indicate success. */
 }
 
-/*!
- * @brief  Begins the TWI implementation using a default frequency
- * @return Returns 0 if already began TWI implementation, otherwise returns 1
+
+
+
+/**
+ * @brief Initializes the TWI (I2C) interface in master mode with the default frequency.
+ * 
+ * This function is a simplified version of the `begin` function, which initializes 
+ * the TWI interface as a master with the default communication frequency of 400kHz 
+ * (defined by `TWI_DEFAULT_FREQUENCY`). It internally calls the more general `begin` 
+ * function with this default frequency.
+ * 
+ * @return `1` if the initialization was successful, `0` if the TWI interface 
+ *         was already initialized.
+ * 
+ * @note This function is provided for convenience, allowing the user to initialize 
+ *       the TWI interface with the default frequency without needing to specify it.
+ * 
+ * @see begin(uint32_t frequency) for more control over the frequency setting.
  */
 const uint8_t __TWI__::begin(void)
 {
     return (this->begin(TWI_DEFAULT_FREQUENCY));
 }
 
-/*!
- * @brief  Begins the TWI implementation as a slave
- * @return Returns 0 if already began TWI implementation, otherwise returns 1
+
+/**
+ * @brief Initializes the TWI (I2C) interface in slave mode with the specified address.
+ * 
+ * This function configures the TWI interface to operate in slave mode, setting the 
+ * device address for communication. The address is shifted left by one bit, as 
+ * required by the TWI protocol. This function also ensures that the TWI interface 
+ * is not already initialized before proceeding.
+ * 
+ * @param address The 7-bit address to assign to this device in slave mode. The 
+ *                address will be shifted left by 1 bit as required by the TWI 
+ *                protocol.
+ * 
+ * @return `1` if the initialization was successful, `0` if the TWI interface 
+ *         was already initialized.
+ * 
+ * @note This function sets the device to slave mode with the specified address.
+ *       Ensure that the address provided is valid and that the master device 
+ *       communicates with this address.
+ * 
+ * @see begin(uint32_t frequency) for master mode initialization, or begin() 
+ *      for default frequency initialization in master mode.
  */
 const uint8_t __TWI__::begin(const uint8_t address)
 {
-    if (this->began)
-        return (0);
-    this->began = 1;
+    if (this->began)  /**< Check if the TWI interface has already been initialized. */
+        return (0);  /**< Return 0 if already initialized. */
 
-    this->role = TWI_ROLE_SLAVE;
-    this->address = address << 1;
-    ATOMIC_BLOCK(ATOMIC_FORCEON)
+    this->began = 1;  /**< Mark the interface as initialized. */
+
+    this->role = TWI_ROLE_SLAVE;  /**< Set the role to slave. */
+    this->address = address << 1;  /**< Set the slave address, shifting it by 1 bit for proper alignment. */
+
+    ATOMIC_BLOCK(ATOMIC_FORCEON)  /**< Begin atomic block to prevent interrupt interference. */
     {
-        *this->twar = this->address;
-        *this->twcr = TWI_BEGIN;
+        *this->twar = this->address;  /**< Set the TWI address register to the configured address. */
+        *this->twcr = TWI_BEGIN;  /**< Set the control register to start TWI communication in slave mode. */
     }
-    return (1);
+
+    return (1);  /**< Return 1 to indicate success. */
 }
 
-/*!
- * @brief  Setting the TWI bus communication frequency
- * @param  frequency
- *         The frequency of TWI bus communication
- * @return Returns 0 if the role is not <MASTER>, otherwise returns a 1
+
+
+/**
+ * @brief Sets the communication frequency for the TWI (I2C) interface.
+ * 
+ * This function configures the frequency of communication for the TWI interface. 
+ * It only works if the TWI is operating in master mode. The frequency is set by 
+ * adjusting the TWI Bit Rate Register (TWBR) based on the desired frequency. 
+ * The calculation assumes the use of the default TWI prescaler, which is set for 
+ * standard operation at a typical microcontroller clock speed.
+ * 
+ * @param frequency The desired TWI communication frequency (in Hz).
+ * 
+ * @return `1` if the frequency was successfully set, `0` if the TWI interface is 
+ *         not in master mode.
  */
 const uint8_t __TWI__::setFrequency(const uint32_t frequency)
 {
-    if (this->role != TWI_ROLE_MASTER)
-        return (0);
+    if (this->role != TWI_ROLE_MASTER)  /**< Check if the TWI is not in master mode. */
+        return (0);  /**< Return 0 if the TWI is not in master mode. */
 
-    this->frequency = frequency;
-    *this->twbr = ((F_CPU / this->frequency) - 16) / 2;
-    return (1);
+    this->frequency = frequency;  /**< Set the desired communication frequency. */
+
+    *this->twbr = ((F_CPU / this->frequency) - 16) / 2;  /**< Calculate and set the Bit Rate Register for the TWI frequency. */
+    
+    return (1);  /**< Return 1 to indicate that the frequency was successfully set. */
 }
 
-/*!
- * @brief  Begining a transmission as <MASTER> to a fixed <SLAVE> address
- * @param  address
- *         The address of TWI bus <SLAVE>
- * @return Returns 0 if the role is not <MASTER>, otherwise returns a 1
+
+/**
+ * @brief Starts the transmission of data to a specified TWI (I2C) address.
+ * 
+ * This function initiates a data transmission to a specific address by first 
+ * ensuring that the TWI is in master mode. It waits for the TWI to be ready, 
+ * then sets up the necessary internal state for transmitting data. It also 
+ * prepares the buffer for the data to be transmitted.
+ * 
+ * @param address The 7-bit address of the TWI slave device to communicate with.
+ * 
+ * @return `1` if the transmission was successfully started, `0` if the TWI 
+ *         interface is not in master mode or if the transmission could not 
+ *         be started.
  */
 const uint8_t __TWI__::beginTransmission(const uint8_t address)
 {
-    if (this->role != TWI_ROLE_MASTER)
-        return (0);
+    if (this->role != TWI_ROLE_MASTER)  /**< Check if the TWI is not in master mode. */
+        return (0);  /**< Return 0 if the TWI is not in master mode. */
 
-    while (this->state != TWI_READY);
-    this->state = TWI_MTX;
-    this->address = (address << 1) | TW_WRITE;
-    this->bufferIndex = 0;
-    this->bufferSize = 0;
-    return (1);
+    while (this->state != TWI_READY);  /**< Wait for the TWI interface to be ready for transmission. */
+    
+    this->state = TWI_MTX;  /**< Set the state to master transmit mode. */
+    this->address = (address << 1) | TW_WRITE;  /**< Prepare the address for writing by shifting it left and setting the write bit. */
+    this->bufferIndex = 0;  /**< Reset the buffer index to the beginning for storing transmitted data. */
+    this->bufferSize = 0;  /**< Initialize the buffer size to zero, indicating no data yet in the buffer. */
+    
+    return (1);  /**< Return 1 to indicate the transmission was successfully started. */
 }
 
-/*!
- * @brief  Writing a byte into the buffer
- * @param  byte
- *         The byte to be written into the buffer
- * @return Returns 0 if the byte doesnt fit into the buffer, otherwise returns a 1
+
+/**
+ * @brief Writes a byte of data to the transmission buffer.
+ * 
+ * This function stores a byte of data in the transmission buffer to be sent 
+ * later. It ensures that the buffer does not exceed its defined size. The 
+ * function will return `1` if the byte was successfully added to the buffer, 
+ * and `0` if the buffer is full.
+ * 
+ * @param byte The byte of data to be written into the transmission buffer.
+ * 
+ * @return `1` if the byte was successfully written to the buffer, `0` if 
+ *         the buffer is full and cannot accommodate more data.
  */
 const uint8_t __TWI__::write(const uint8_t byte)
 {
-    if (this->bufferSize >= TWI_BUFFER_SIZE)
-        return (0);
-    this->buffer[this->bufferSize++] = byte;
-    return (1);
+    if (this->bufferSize >= TWI_BUFFER_SIZE)  /**< Check if the buffer has reached its maximum size. */
+        return (0);  /**< Return 0 if the buffer is full and cannot accept more data. */
+    
+    this->buffer[this->bufferSize++] = byte;  /**< Add the byte to the buffer and increment the buffer size. */
+    
+    return (1);  /**< Return 1 to indicate the byte was successfully written to the buffer. */
 }
 
-/*!
- * @brief  Writing an array of bytes into the buffer that has a known size
- * @param  bytes
- *         The array of bytes to be written into the buffer
- * @param  size
- *         The size of the array of bytes to be written into the buffer
- * @return Returns 0 if one of the bytes from the array of bytes don't fit into the buffer anymore, otheriwse returns a 1
+
+/**
+ * @brief Writes a sequence of bytes to the transmission buffer.
+ * 
+ * This function iterates through a sequence of bytes and writes each byte 
+ * to the transmission buffer. If any byte cannot be written (due to the buffer 
+ * being full), the function immediately returns `0`. If all bytes are successfully 
+ * written, the function returns `1`.
+ * 
+ * @param bytes Pointer to the array of bytes to be written into the transmission buffer.
+ * @param size The number of bytes to write to the buffer.
+ * 
+ * @return `1` if all bytes were successfully written to the buffer, `0` if 
+ *         any byte failed to be written due to the buffer being full.
  */
 const uint8_t __TWI__::write(const uint8_t* bytes, const uint8_t size)
 {
-    for (const uint8_t* p = bytes; p < (bytes + size); p++)
-        if (!this->write(*p))
-            return (0);
-    return (1);
+    for (const uint8_t* p = bytes; p < (bytes + size); p++)  /**< Loop through each byte in the input array. */
+        if (!this->write(*p))  /**< Try to write the current byte to the buffer. If it fails, return 0. */
+            return (0);  /**< Return 0 if any byte cannot be written due to the buffer being full. */
+    
+    return (1);  /**< Return 1 if all bytes were successfully written to the buffer. */
 }
 
-/*!
- * @brief  Writing any type of data into the buffer that has a known size
- * @param  bytes
- *         The data to be written into the buffer
- * @param  size
- *         The size of the data to be written into the buffer
- * @return Returns 0 if one of the bytes from the data don't fit into the buffer anymore, otheriwse returns a 1
+
+/**
+ * @brief Writes a sequence of data to the transmission buffer.
+ * 
+ * This function allows writing any type of data to the transmission buffer 
+ * by casting the input data pointer to a `const uint8_t*`. It then delegates 
+ * the actual writing process to the `write` function that handles byte arrays.
+ * If any byte cannot be written (due to the buffer being full), the function 
+ * returns `0`. If all data is successfully written, it returns `1`.
+ * 
+ * @param data Pointer to the data to be written to the transmission buffer.
+ * @param size The number of bytes of data to write.
+ * 
+ * @return `1` if all bytes were successfully written to the buffer, `0` if 
+ *         any byte failed to be written due to the buffer being full.
  */
 const uint8_t __TWI__::write(const void* data, const uint8_t size)
 {
-    return (this->write((const uint8_t*)data, size));
+    return (this->write((const uint8_t*)data, size));  /**< Cast the data pointer to uint8_t* and call the byte-array write function. */
 }
 
-/*!
- * @brief  Ending the transmission as <MASTER>
- * @param  sendStop
- *         The condition for sending or not sending a stop signal over the TWI bus at the end of transmission
- * @return Returns 0 if the role is not <MASTER>
- *         Returns 1 if successfull
- *         Returns 2 if <SLAVE> did not <ACK> the address
- *         Returns 3 if <SLAVE> did not <ACK> the data
- *         Returns 4 if an unknown error happened
+
+/**
+ * @brief Ends a transmission by either sending a STOP or repeated START condition.
+ * 
+ * This function ends the transmission in the I2C protocol. If `sendStop` is set to `1`, 
+ * a STOP condition will be sent to indicate the end of the communication. If the master 
+ * is in a repeated start condition (due to a prior communication), the function ensures 
+ * that the proper state transitions occur and prevents unnecessary retransmissions of 
+ * the start condition.
+ * 
+ * The function waits until the current transmission is completed before returning the 
+ * status. The function is valid only when the TWI role is set to master.
+ * 
+ * @param sendStop A flag that determines whether to send a STOP condition (`1`) or 
+ *                 a repeated START condition (`0`).
+ * 
+ * @return `1` if the transmission ended successfully, `0` if the role is not master.
  */
 const uint8_t __TWI__::endTransmission(const uint8_t sendStop)
 {
-    if (this->role != TWI_ROLE_MASTER)
+    if (this->role != TWI_ROLE_MASTER)  /**< Check if the role is master; if not, return 0. */
         return (0);
 
-    this->sendStop = sendStop;
-    // if we're in a repeated start, then we've already sent the START
-    // in the ISR. Don't do it again.
-    //
-    if (this->inRepStart)
+    this->sendStop = sendStop;  /**< Set the sendStop flag to the provided value. */
+    
+    // If we're in a repeated start, we've already sent the START in the ISR. Don't do it again.
+    if (this->inRepStart)  /**< Check if we are in a repeated start condition. */
     {
-        // if we're in the repeated start state, then we've already sent the start,
-        // (@@@ we hope), and the TWI statemachine is just waiting for the address byte.
-        // We need to remove ourselves from the repeated start state before we enable interrupts,
-        // since the ISR is ASYNC, and we could get confused if we hit the ISR before cleaning
-        // up. Also, don't enable the START interrupt. There may be one pending from the 
-        // repeated start that we sent outselves, and that would really confuse things.
-        this->inRepStart = 0; // remember, we're dealing with an ASYNC ISR
-        *this->twdr =  this->address;				
-        *this->twcr = TWI_SEND_ACK;
+        // In the repeated start state, the start condition has already been sent.
+        // We need to clean up before enabling interrupts.
+        this->inRepStart = 0;  /**< Reset the repeated start flag. */
+        *this->twdr = this->address;  /**< Write the address to the data register. */
+        *this->twcr = TWI_SEND_ACK;  /**< Send an ACK to continue the transmission. */
     }
     else
-        *this->twcr = TWI_SEND_START;
+        *this->twcr = TWI_SEND_START;  /**< Send the START condition. */
 
-    while(this->state == TWI_MTX);
+    while(this->state == TWI_MTX);  /**< Wait until the transmission is complete (not in master transmit mode). */
     
-    return (this->status);
+    return (this->status);  /**< Return the transmission status. */
 }
 
-/*!
- * @brief  Ending the transmission as <MASTER> with a stop condition
- * @return Returns 0 if the role is not <MASTER>
- *         Returns 1 if successfull
- *         Returns 2 if <SLAVE> did not <ACK> the address
- *         Returns 3 if <SLAVE> did not <ACK> the data
- *         Returns 4 if an unknown error happened
+
+/**
+ * @brief Ends a transmission by sending a STOP condition.
+ * 
+ * This function ends the transmission by sending a STOP condition, which is a signal 
+ * to indicate the end of the communication in the I2C protocol. It simply calls the 
+ * `endTransmission` function with the `sendStop` flag set to `1` to send the STOP 
+ * condition.
+ * 
+ * @return `1` if the transmission ended successfully, `0` if the role is not master.
  */
 const uint8_t __TWI__::endTransmission(void)
 {
-    return (this->endTransmission((const uint8_t)1));
+    return (this->endTransmission((const uint8_t)1));  /**< Call the `endTransmission` with `sendStop` set to 1 to send the STOP condition. */
 }
 
-/*!
- * @brief  Requesting data as a <MASTER>
- * @param  address
- *         The address of TWI bus <SLAVE>
- * @param  quantity
- *         The quantity in bytes requested
- * @param  sendStop
- *         The condition for sending or not sending a stop signal over the TWI bus at the end of request
- * @return Returns 0 if the role is not <MASTER>
- *         Returns 255 if the quantity requested don't fit into the buffer
- *         Returns quantity if successfull
+
+/**
+ * @brief Requests data from a slave device on the I2C bus.
+ * 
+ * This function initiates a request to a slave device, expecting a specified number 
+ * of bytes to be received. It configures the TWI interface to enter reception mode 
+ * and reads the data into a buffer. The function ensures proper handling of repeated 
+ * starts and ACK/NACK control during the reception.
+ * 
+ * @param address The I2C address of the slave device.
+ * @param quantity The number of bytes to request from the slave device.
+ * @param sendStop A flag to indicate whether a STOP condition should be sent after 
+ *                 the request (default is `1` to send STOP, `0` to keep the bus open).
+ * 
+ * @return The number of bytes received or `255` if the requested quantity exceeds 
+ *         the buffer size. Returns `0` if the role is not master.
  */
 const uint8_t __TWI__::requestFrom(const uint8_t address, uint8_t quantity, const uint8_t sendStop)
 {
-    if (this->role != TWI_ROLE_MASTER)
+    if (this->role != TWI_ROLE_MASTER)  /**< Check if the role is MASTER, return 0 if not. */
         return (0);
 
-    if (quantity > TWI_BUFFER_SIZE)
+    if (quantity > TWI_BUFFER_SIZE)  /**< Check if requested quantity exceeds buffer size, return 255 if true. */
         return (255);
 
-    while (this->state != TWI_READY);
-    this->state = TWI_MRX;
-    this->sendStop = sendStop;
-    this->bufferIndex = 0;
-    // This is not intuitive, read on...
-    // On receive, the previously configured ACK/NACK setting is transmitted in
-    // response to the received byte before the interrupt is signalled. 
-    // Therefor we must actually set NACK when the _next_ to last byte is
-    // received, causing that NACK to be sent in response to receiving the last
-    // expected byte of data.
-    this->bufferSize = quantity - 1;
-    this->address = (address << 1) | TW_READ;
-    // if we're in a repeated start, then we've already sent the START
-    // in the ISR. Don't do it again.
-    //
-    if (this->inRepStart)
+    while (this->state != TWI_READY);  /**< Wait until TWI state is ready. */
+    this->state = TWI_MRX;  /**< Set state to master receiver (MRX). */
+    this->sendStop = sendStop;  /**< Set the sendStop flag to determine whether to send a STOP condition. */
+    this->bufferIndex = 0;  /**< Reset buffer index. */
+    
+    // Set buffer size to quantity - 1 because we will handle the last byte differently
+    this->bufferSize = quantity - 1;  
+
+    this->address = (address << 1) | TW_READ;  /**< Set the address for reading (shifted and added TW_READ). */
+
+    // Handle repeated start if needed.
+    if (this->inRepStart)  /**< If we are in a repeated start state... */
     {
-        // if we're in the repeated start state, then we've already sent the start,
-        // (@@@ we hope), and the TWI statemachine is just waiting for the address byte.
-        // We need to remove ourselves from the repeated start state before we enable interrupts,
-        // since the ISR is ASYNC, and we could get confused if we hit the ISR before cleaning
-        // up. Also, don't enable the START interrupt. There may be one pending from the 
-        // repeated start that we sent outselves, and that would really confuse things.
-        this->inRepStart = 0; // remember, we're dealing with an ASYNC ISR
-        *this->twdr =  this->address;				
-        *this->twcr = TWI_SEND_ACK;
+        this->inRepStart = 0;  /**< Clear repeated start flag. */
+        *this->twdr = this->address;  /**< Write the address to the TWI data register. */
+        *this->twcr = TWI_SEND_ACK;  /**< Send ACK and continue. */
     }
     else
-        *this->twcr = TWI_SEND_START;
+        *this->twcr = TWI_SEND_START;  /**< Send start condition for a normal request. */
 
-    while(this->state == TWI_MRX);
+    while(this->state == TWI_MRX);  /**< Wait until the data reception is completed. */
 
-    if (this->bufferIndex < quantity)
-        quantity = this->bufferIndex;
+    // Adjust quantity based on the actual number of received bytes
+    if (this->bufferIndex < quantity)  /**< If fewer bytes were received than requested... */
+        quantity = this->bufferIndex;  /**< Adjust requested quantity to the actual received quantity. */
     
-    this->bufferSize = quantity;
-    this->bufferIndex = 0;
+    this->bufferSize = quantity;  /**< Update buffer size with the number of received bytes. */
+    this->bufferIndex = 0;  /**< Reset buffer index for next operation. */
     
-    return (quantity);
+    return (quantity);  /**< Return the number of bytes received. */
 }
 
-/*!
- * @brief  Requesting data as a <MASTER> with a stop condition
- * @param  address
- *         The address of TWI bus <SLAVE>
- * @param  quantity
- *         The quantity in bytes requested
- * @return Returns 0 if the role is not <MASTER>
- *         Returns 255 if the quantity requested don't fit into the buffer
- *         Returns quantity if successfull
+
+/**
+ * @brief Requests data from a slave device on the I2C bus.
+ * 
+ * This function is a simplified version of `requestFrom` that assumes a STOP condition 
+ * should be sent after the request. It is used when no specific need for handling 
+ * the `sendStop` flag arises. The function forwards the request to the full 
+ * `requestFrom` function with the `sendStop` parameter set to `1`.
+ * 
+ * @param address The I2C address of the slave device.
+ * @param quantity The number of bytes to request from the slave device.
+ * 
+ * @return The number of bytes received, or `255` if the requested quantity exceeds 
+ *         the buffer size. Returns `0` if the role is not master.
  */
 const uint8_t __TWI__::requestFrom(const uint8_t address, uint8_t quantity)
 {
-    return (this->requestFrom(address, quantity, (const uint8_t)1));
+    return (this->requestFrom(address, quantity, (const uint8_t)1));  /**< Call the full requestFrom with sendStop set to 1. */
 }
+
 
 /*!
  * @brief  Checking the available amount of bytes received into the buffer
