@@ -150,55 +150,244 @@
 #define TWI_END (const uint8_t)0
 
 
+/**
+ * @brief Class for managing TWI (Two-Wire Interface) communication.
+ *
+ * This class handles the initialization, transmission, reception, and termination 
+ * of TWI (I2C) communication, including both master and slave roles. It provides 
+ * methods for managing the frequency, transmission, reception of data, and 
+ * callback functions for handling the received and transmitted data.
+ */
 class __TWI__
 {
     public:
+        /**
+         * @brief Constructor for the TWI class.
+         * 
+         * Initializes the TWI interface with the provided register addresses.
+         * 
+         * @param twbr Pointer to the TWI bit rate register.
+         * @param twsr Pointer to the TWI status register.
+         * @param twar Pointer to the TWI address register.
+         * @param twdr Pointer to the TWI data register.
+         * @param twcr Pointer to the TWI control register.
+         * @param twamr Pointer to the TWI address mask register.
+         */
         __TWI__(volatile uint8_t* twbr, volatile uint8_t* twsr, volatile uint8_t* twar, volatile uint8_t* twdr, volatile uint8_t* twcr, volatile uint8_t* twamr);
+
+        /**
+         * @brief Destructor for the TWI class.
+         * 
+         * Cleans up any resources used by the TWI interface.
+         */
         ~__TWI__();
-        const uint8_t begin            (const uint32_t frequency);
-        const uint8_t begin            (void);
-        const uint8_t begin            (const uint8_t address);
-        const uint8_t setFrequency     (const uint32_t frequency);
+
+        /**
+         * @brief Initializes the TWI interface with a specified frequency.
+         * 
+         * This method configures the TWI interface to operate at the given frequency.
+         * 
+         * @param frequency The desired frequency of the TWI interface.
+         * @return uint8_t The status of the operation.
+         */
+        const uint8_t begin(const uint32_t frequency);
+
+        /**
+         * @brief Initializes the TWI interface with default settings.
+         * 
+         * This method initializes the TWI interface with default parameters.
+         * 
+         * @return uint8_t The status of the operation.
+         */
+        const uint8_t begin(void);
+
+        /**
+         * @brief Initializes the TWI interface with a specified address.
+         * 
+         * This method initializes the TWI interface and sets the address for the 
+         * communication.
+         * 
+         * @param address The address to be set for the TWI interface.
+         * @return uint8_t The status of the operation.
+         */
+        const uint8_t begin(const uint8_t address);
+
+        /**
+         * @brief Sets the TWI frequency.
+         * 
+         * This method adjusts the TWI interface to operate at a new frequency.
+         * 
+         * @param frequency The desired frequency for the TWI interface.
+         * @return uint8_t The status of the operation.
+         */
+        const uint8_t setFrequency(const uint32_t frequency);
+
+        /**
+         * @brief Begins a transmission to a specified address.
+         * 
+         * This method prepares the TWI interface for transmitting data to a specific address.
+         * 
+         * @param address The address to send data to.
+         * @return uint8_t The status of the operation.
+         */
         const uint8_t beginTransmission(const uint8_t address);
-        const uint8_t write            (const uint8_t byte);
-        const uint8_t write            (const uint8_t* bytes, const uint8_t size);
-        const uint8_t write            (const void* data, const uint8_t size);
-        const uint8_t endTransmission  (const uint8_t sendStop);
-        const uint8_t endTransmission  (void);
-        const uint8_t requestFrom      (const uint8_t address, uint8_t quantity, const uint8_t sendStop);
-        const uint8_t requestFrom      (const uint8_t address, uint8_t quantity);
-        const uint8_t available        (void);
-        const uint8_t read             (void);
-        const uint8_t end              (void);
-        void          setRxCallback    (void (*function)(const uint8_t));
-        void          setTxCallback    (void (*function)(void));
-        void          isr              (void);
+
+        /**
+         * @brief Writes a single byte of data to the TWI bus.
+         * 
+         * This method writes one byte to the TWI bus.
+         * 
+         * @param byte The byte to be written.
+         * @return uint8_t The status of the operation.
+         */
+        const uint8_t write(const uint8_t byte);
+
+        /**
+         * @brief Writes an array of bytes to the TWI bus.
+         * 
+         * This method writes multiple bytes to the TWI bus.
+         * 
+         * @param bytes Pointer to the array of bytes to be written.
+         * @param size The number of bytes to write.
+         * @return uint8_t The status of the operation.
+         */
+        const uint8_t write(const uint8_t* bytes, const uint8_t size);
+
+        /**
+         * @brief Writes a block of data to the TWI bus.
+         * 
+         * This method writes a block of data to the TWI bus.
+         * 
+         * @param data Pointer to the data to be written.
+         * @param size The size of the data block.
+         * @return uint8_t The status of the operation.
+         */
+        const uint8_t write(const void* data, const uint8_t size);
+
+        /**
+         * @brief Ends a transmission to the TWI bus with a stop condition.
+         * 
+         * This method sends a stop condition at the end of a transmission.
+         * 
+         * @param sendStop Indicates whether a stop condition should be sent.
+         * @return uint8_t The status of the operation.
+         */
+        const uint8_t endTransmission(const uint8_t sendStop);
+
+        /**
+         * @brief Ends a transmission to the TWI bus without a stop condition.
+         * 
+         * This method ends the transmission but does not send a stop condition.
+         * 
+         * @return uint8_t The status of the operation.
+         */
+        const uint8_t endTransmission(void);
+
+        /**
+         * @brief Requests data from a specified address.
+         * 
+         * This method requests a specified amount of data from a given address.
+         * 
+         * @param address The address to request data from.
+         * @param quantity The number of bytes to request.
+         * @param sendStop Indicates whether a stop condition should be sent after the request.
+         * @return uint8_t The status of the operation.
+         */
+        const uint8_t requestFrom(const uint8_t address, uint8_t quantity, const uint8_t sendStop);
+
+        /**
+         * @brief Requests data from a specified address.
+         * 
+         * This method requests a specified amount of data from a given address without 
+         * sending a stop condition.
+         * 
+         * @param address The address to request data from.
+         * @param quantity The number of bytes to request.
+         * @return uint8_t The status of the operation.
+         */
+        const uint8_t requestFrom(const uint8_t address, uint8_t quantity);
+
+        /**
+         * @brief Checks if data is available for reading.
+         * 
+         * This method checks if there is data available in the buffer to read.
+         * 
+         * @return uint8_t The number of available bytes.
+         */
+        const uint8_t available(void);
+
+        /**
+         * @brief Reads a byte of data from the TWI bus.
+         * 
+         * This method reads one byte of data from the TWI bus.
+         * 
+         * @return uint8_t The byte of data read.
+         */
+        const uint8_t read(void);
+
+        /**
+         * @brief Ends the TWI communication and releases the bus.
+         * 
+         * This method sends a stop condition and releases the TWI bus.
+         * 
+         * @return uint8_t The status of the operation.
+         */
+        const uint8_t end(void);
+
+        /**
+         * @brief Sets a callback function for receiving data.
+         * 
+         * This method sets a callback function to be invoked when data is received.
+         * 
+         * @param function The callback function to be invoked on receiving data.
+         */
+        void setRxCallback(void (*function)(const uint8_t));
+
+        /**
+         * @brief Sets a callback function for transmitting data.
+         * 
+         * This method sets a callback function to be invoked when data is transmitted.
+         * 
+         * @param function The callback function to be invoked on transmitting data.
+         */
+        void setTxCallback(void (*function)(void));
+
+        /**
+         * @brief Interrupt service routine for handling TWI communication.
+         * 
+         * This method is triggered when an interrupt occurs in the TWI system. It handles 
+         * the communication states and manages the transitions between master and slave roles.
+         */
+        void isr(void);
+
     private:
-        /* General */
-        volatile uint8_t* twbr;
-        volatile uint8_t* twsr;
-        volatile uint8_t* twar;
-        volatile uint8_t* twdr;
-        volatile uint8_t* twcr;
-        volatile uint8_t* twamr;
-        uint8_t began;
-        uint32_t frequency;
-        uint8_t role;
-        volatile uint8_t state;
-        volatile uint8_t sendStop;
-        volatile uint8_t inRepStart;
-        volatile uint8_t status;
-        volatile uint8_t address;
-        volatile uint8_t bufferIndex;
-        volatile uint8_t bufferSize;
-        volatile uint8_t buffer[TWI_BUFFER_SIZE];
+        /* General TWI registers and state information */
+        volatile uint8_t* twbr;   //*< Pointer to the TWI bit rate register.
+        volatile uint8_t* twsr;   //*< Pointer to the TWI status register.
+        volatile uint8_t* twar;   //*< Pointer to the TWI address register.
+        volatile uint8_t* twdr;   //*< Pointer to the TWI data register.
+        volatile uint8_t* twcr;   //*< Pointer to the TWI control register.
+        volatile uint8_t* twamr;  //*< Pointer to the TWI address mask register.
+        
+        uint8_t began;            //*< Flag indicating whether TWI communication has begun.
+        uint32_t frequency;       //*< The current frequency of the TWI interface.
+        uint8_t role;             //*< The role of the interface (master or slave).
+        volatile uint8_t state;   //*< The current state of the TWI interface.
+        volatile uint8_t sendStop;//*< Flag indicating whether a stop condition should be sent.
+        volatile uint8_t inRepStart;  //*< Flag indicating if a repeated start condition is active.
+        volatile uint8_t status;  //*< The status of the current TWI operation.
+        volatile uint8_t address; //*< The address of the TWI device.
+        volatile uint8_t bufferIndex;  //*< The current index in the data buffer.
+        volatile uint8_t bufferSize;   //*< The size of the data buffer.
+        volatile uint8_t buffer[TWI_BUFFER_SIZE]; //*< The buffer for storing data.
 
-        void (*rxCallback)(const uint8_t size);
-        void (*txCallback)();
+        void (*rxCallback)(const uint8_t size); //*< The callback function for receiving data.
+        void (*txCallback)();  //*< The callback function for transmitting data.
 
-        void releaseBus(void);
-        void stop(void);
+        void releaseBus(void);  //*< Releases the TWI bus.
+        void stop(void);        //*< Sends a stop condition to terminate TWI communication.
 };
+
 
 #if defined(__AVR_ATmega328__)  || \
     defined(__AVR_ATmega328P__) || \

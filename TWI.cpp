@@ -412,208 +412,283 @@ const uint8_t __TWI__::requestFrom(const uint8_t address, uint8_t quantity)
 }
 
 
-/*!
- * @brief  Checking the available amount of bytes received into the buffer
- * @return Returns the available amount of bytes received into the buffer
+/**
+ * @brief Returns the number of bytes available in the receive buffer.
+ * 
+ * This function calculates the number of bytes that have been successfully received
+ * from the slave device and stored in the buffer, but not yet read by the user. It 
+ * subtracts the current index from the total buffer size to provide the number of 
+ * remaining bytes available for reading.
+ * 
+ * @return The number of bytes available in the buffer for reading.
  */
 const uint8_t __TWI__::available(void)
 {
-    return (this->bufferSize - this->bufferIndex);
+    return (this->bufferSize - this->bufferIndex);  /**< Calculate available bytes by subtracting the current index from the buffer size. */
 }
 
-/*!
- * @brief  Reading a byte from the buffer
- * @return Returns 0 if the buffer index has reached the buffer size
- *         Returns the element of buffer if successful
+
+/**
+ * @brief Reads a byte of data from the receive buffer.
+ * 
+ * This function reads the next byte from the buffer, incrementing the buffer index.
+ * If there are no more bytes available to read (i.e., the index exceeds the buffer size),
+ * it returns 0.
+ * 
+ * @return The next byte of data from the buffer, or `0` if there are no more bytes to read.
  */
 const uint8_t __TWI__::read(void)
 {
-    if (this->bufferIndex >= this->bufferSize)
-        return (0);
-    return (this->buffer[this->bufferIndex++]);
+    if (this->bufferIndex >= this->bufferSize)  /**< Check if all data has been read from the buffer. */
+        return (0);  /**< If no data is left, return 0. */
+    return (this->buffer[this->bufferIndex++]);  /**< Return the next byte and increment the buffer index. */
 }
 
-/*!
- * @brief  Ending the <TWI> bus communication
- * @return Returns 0 if the <TWI> bus is already stopped
- *         Returns 1 if the <TWI> bus was stopped successfully
+
+/**
+ * @brief Ends the current TWI (I2C) communication.
+ * 
+ * This function stops any ongoing communication and resets the TWI interface to 
+ * its initial state. It also restores the default role (master) and clears the address.
+ * 
+ * @return `1` if the operation was successful, `0` if the TWI interface was not 
+ *         initialized previously.
  */
 const uint8_t __TWI__::end(void)
 {
-    if (!this->began)
-        return (0);
-    this->began = 0;
+    if (!this->began)  /**< Check if the TWI interface was initialized. */
+        return (0);  /**< Return 0 if not initialized. */
+    
+    this->began = 0;  /**< Mark the TWI interface as uninitialized. */
 
-    ATOMIC_BLOCK(ATOMIC_RESTORESTATE)
+    ATOMIC_BLOCK(ATOMIC_RESTORESTATE)  /**< Ensure atomic operation to prevent interruption during TWI operations. */
     {
-        *this->twcr = TWI_END;
-        *this->twar = 0;
-        *this->twcr = TWI_BEGIN;
-        *this->twbr = 0;
-        this->role = TWI_ROLE_MASTER;
-        this->address = *this->twar;
+        *this->twcr = TWI_END;  /**< Disable TWI communication. */
+        *this->twar = 0;  /**< Clear the TWI address register. */
+        *this->twcr = TWI_BEGIN;  /**< Re-enable TWI communication. */
+        *this->twbr = 0;  /**< Clear the TWI bit rate register. */
+        this->role = TWI_ROLE_MASTER;  /**< Set the role back to master. */
+        this->address = *this->twar;  /**< Store the address from the TWI address register. */
     }
         
-    return (1);
+    return (1);  /**< Return 1 to indicate successful completion. */
 }
 
-void __TWI__::setRxCallback(void (*function)(const uint8_t))
+
+/**
+ * @brief Sets the callback function for receiving data with a specified size.
+ * 
+ * This function assigns a user-defined callback to be executed when data is received 
+ * via TWI. The callback function should take a single `uint8_t` parameter, which 
+ * represents the size of the received data.
+ * 
+ * @param function The callback function to be executed when data is received. It 
+ *                 should have the signature `void function(uint8_t size)` where 
+ *                 `size` indicates the size of the received data.
+ */
+void __TWI__::setRxCallback(void (*function)(const uint8_t size))
 {
-    this->rxCallback = function;
+    this->rxCallback = function;  /**< Store the provided function in the rxCallback member. */
 }
 
+/**
+ * @brief Sets the callback function for transmitting data.
+ * 
+ * This function assigns a user-defined callback to be executed when the TWI is ready 
+ * to transmit data. The callback function does not take any parameters.
+ * 
+ * @param function The callback function to be executed when TWI is ready to transmit. 
+ *                 It should have the signature `void function()`.
+ */
 void __TWI__::setTxCallback(void (*function)(void))
 {
-    this->txCallback = function;
+    this->txCallback = function;  /**< Store the provided function in the txCallback member. */
 }
 
+
+/**
+ * @brief Interrupt Service Routine (ISR) for handling TWI events.
+ * 
+ * This function is called when a TWI interrupt occurs, and it handles the 
+ * different TWI events, such as START, STOP, data reception, and transmission 
+ * for both master and slave modes. It manages the internal state of the TWI 
+ * interface and interacts with buffers and callback functions.
+ */
 void __TWI__::isr(void)
 {
-    this->status = *this->twsr & 0xF8;
-    switch (this->status)
+    this->status = *this->twsr & 0xF8;  /**< Read the status of TWI from TWSR register. */
+    
+    switch (this->status)  /**< Handle different status cases based on the TWI event. */
     {
         /* ALL MASTER */
-        case TW_START:                                                        // Start condition detected
-        case TW_REP_START:                                                    // Repeated start condition detected
-            *this->twdr = this->address;                                      // Read the address into TWDR
-            *this->twcr = TWI_SEND_ACK;                                       // Send an ACK to master
+        case TW_START:  /**< Start condition detected */
+        case TW_REP_START:  /**< Repeated start condition detected */
+            *this->twdr = this->address;  /**< Write the TWI address into the data register. */
+            *this->twcr = TWI_SEND_ACK;  /**< Send ACK to the master. */
             break;
         
         /* MASTER TRANSMITTER */
-        case TW_MT_SLA_ACK:                                                   // Addressed, returned ack
-        case TW_MT_DATA_ACK:                                                  // Data received, returned ack
-            if (this->bufferIndex < this->bufferSize)                         // If buffer index is within buffer size
+        case TW_MT_SLA_ACK:  /**< Addressed, returned ACK */
+        case TW_MT_DATA_ACK:  /**< Data sent, returned ACK */
+            if (this->bufferIndex < this->bufferSize)  /**< If there is more data to transmit */
             {
-                *this->twdr = this->buffer[this->bufferIndex++];              // Write a byte into WTDR from buffer
-                *this->twcr = TWI_SEND_ACK;                                   // Send an ACK to master
+                *this->twdr = this->buffer[this->bufferIndex++];  /**< Write the data byte into TWDR. */
+                *this->twcr = TWI_SEND_ACK;  /**< Send ACK. */
             }
-            else                                                              // If no more data should be sent
+            else  /**< No more data to send */
             {
-                if (this->sendStop)                                           // If a stop condition should be sent
-                    this->stop();                                             // Send a stop condition signal
-                else                                                          // If transmission should continue
+                if (this->sendStop)  /**< If a stop condition should be sent */
+                    this->stop();  /**< Send a stop condition. */
+                else  /**< If the transmission should continue */
                 {
-                    this->inRepStart = 1;                                     // We're in repeated start now
-                    // don't enable the interrupt. We'll generate the start, but we
-                    // avoid handling the interrupt until we're in the next transaction,
-                    // at the point where we would normally issue the start.
-                    *this->twcr = TWI_SEND_REP_START;                         // Send a repeated start condition signal
-                    this->state = TWI_READY;                                  // Now we are ready fro more transactions
+                    this->inRepStart = 1;  /**< Mark that we are in repeated start. */
+                    *this->twcr = TWI_SEND_REP_START;  /**< Send a repeated start condition. */
+                    this->state = TWI_READY;  /**< Set state to ready for more transactions. */
                 }
             }
             break;
-        case TW_MT_SLA_NACK:                                                  // Addressed, returned nack
-            this->stop();                                                     // Send a stop condition
-            break;
-        case TW_MT_DATA_NACK:                                                 // Data received, returned nack
-            this->stop();                                                     // Send a stop condition
-            break;
-        case TW_MT_ARB_LOST:                                                  // Arbitration lost as master
-            this->releaseBus();                                               // Release the bus
-            break;
-            
-        // MASTER RECEIVER
-        case TW_MR_DATA_ACK:
-            this->buffer[this->bufferIndex++] = *this->twdr;
-            // No break needed
-        case TW_MR_SLA_ACK:
-            if(this->bufferIndex < this->bufferSize)
-                *this->twcr = TWI_SEND_ACK;
-            else
-                *this->twcr = TWI_SEND_NACK;
-            break;
-        case TW_MR_DATA_NACK:
-            this->buffer[this->bufferIndex++] = *this->twdr;
-            if (this->sendStop)
-                this->stop();
-            else
-            {
-                this->inRepStart = 1;
-                *this->twcr = TWI_SEND_REP_START;
-                this->state = TWI_READY;
-            } 
-	        break;
-        case TW_MR_SLA_NACK:
-            this->stop();
+        
+        case TW_MT_SLA_NACK:  /**< Addressed, returned NACK */
+        case TW_MT_DATA_NACK:  /**< Data sent, returned NACK */
+            this->stop();  /**< Send a stop condition. */
             break;
 
-        /* SLAVE RECEIVER */ 
-        case TW_SR_SLA_ACK:                                      // Addressed, returned ack
-        case TW_SR_GCALL_ACK:                                    // Addressed generally, returned ack
-        case TW_SR_ARB_LOST_SLA_ACK:                             // Lost arbitration in slave addressing, returned ack
-        case TW_SR_ARB_LOST_GCALL_ACK:                           // Lost arbitration in general call, returned ack
-            this->state = TWI_SRX;                               // Set the state as slave RX
-            this->bufferIndex = 0;                               // Reset the index
-            *this->twcr = TWI_SEND_ACK;                          // Send an ACK to master
+        case TW_MT_ARB_LOST:  /**< Arbitration lost as master */
+            this->releaseBus();  /**< Release the bus for other masters. */
             break;
-        case TW_SR_DATA_ACK:                                     // Data received, returned ack
-        case TW_SR_GCALL_DATA_ACK:                               // Data received generally, returned ack
-            if (this->bufferIndex < TWI_BUFFER_SIZE)             // If buffer index is withing buffer size bounds
+            
+        /* MASTER RECEIVER */
+        case TW_MR_DATA_ACK:  /**< Data received, returned ACK */
+            this->buffer[this->bufferIndex++] = *this->twdr;  /**< Store received byte in buffer. */
+            // Fall through to TW_MR_SLA_ACK case.
+        case TW_MR_SLA_ACK:  /**< Addressed, returned ACK */
+            if (this->bufferIndex < this->bufferSize)  /**< If there’s more data to receive */
+                *this->twcr = TWI_SEND_ACK;  /**< Send ACK for the next byte. */
+            else  /**< If all data has been received */
+                *this->twcr = TWI_SEND_NACK;  /**< Send NACK. */
+            break;
+
+        case TW_MR_DATA_NACK:  /**< Data received, returned NACK */
+            this->buffer[this->bufferIndex++] = *this->twdr;  /**< Store received byte. */
+            if (this->sendStop)
+                this->stop();  /**< Send stop if requested. */
+            else
             {
-                this->buffer[this->bufferIndex++] = *this->twdr; // Read a byte from TWDR into buffer
-                *this->twcr = TWI_SEND_ACK;                      // Send an ACK to master
+                this->inRepStart = 1;  /**< Mark that we are in repeated start. */
+                *this->twcr = TWI_SEND_REP_START;  /**< Send a repeated start. */
+                this->state = TWI_READY;  /**< Set state to ready. */
+            } 
+            break;
+
+        case TW_MR_SLA_NACK:  /**< Addressed, returned NACK */
+            this->stop();  /**< Send stop condition. */
+            break;
+
+        /* SLAVE RECEIVER */
+        case TW_SR_SLA_ACK:  /**< Addressed, returned ACK */
+        case TW_SR_GCALL_ACK:  /**< Addressed generally, returned ACK */
+        case TW_SR_ARB_LOST_SLA_ACK:  /**< Lost arbitration in slave addressing */
+        case TW_SR_ARB_LOST_GCALL_ACK:  /**< Lost arbitration in general call */
+            this->state = TWI_SRX;  /**< Set state to slave receiver. */
+            this->bufferIndex = 0;  /**< Reset buffer index. */
+            *this->twcr = TWI_SEND_ACK;  /**< Send ACK. */
+            break;
+        
+        case TW_SR_DATA_ACK:  /**< Data received, returned ACK */
+        case TW_SR_GCALL_DATA_ACK:  /**< Data received generally, returned ACK */
+            if (this->bufferIndex < TWI_BUFFER_SIZE)  /**< If there is space in the buffer */
+            {
+                this->buffer[this->bufferIndex++] = *this->twdr;  /**< Store received data byte. */
+                *this->twcr = TWI_SEND_ACK;  /**< Send ACK. */
             }
             else
-                *this->twcr = TWI_SEND_NACK;                     // Send an NACK to master
-            break;
-        case TW_SR_STOP:                                         // Stop or repeated start condition received
-            this->stop();                                        // Send a stop condition signal
-            this->bufferSize = this->bufferIndex;                // The size is where the index stopped
-            this->bufferIndex = 0;                               // Now reset the index
-            if (this->rxCallback != NULL)                        // If an RX callback function was registered
-                this->rxCallback(this->bufferIndex);             // Call the RX callback function
-            this->releaseBus();                                  // Release the bus
-            break;
-        case TW_SR_DATA_NACK:                                    // Data received, returned nack
-        case TW_SR_GCALL_DATA_NACK:                              // Data received generally, returned nack
-            *this->twcr = TWI_SEND_NACK;                         // Send an NACK to master
+                *this->twcr = TWI_SEND_NACK;  /**< Send NACK. */
             break;
 
-        // SLAVE TRANSMITTER
-        case TW_ST_SLA_ACK:          // addressed, returned ack
-        case TW_ST_ARB_LOST_SLA_ACK: // arbitration lost, returned ack
-            this->state = TWI_STX;
-            this->bufferIndex = 0;
-            this->bufferSize = 0;
-            if (this->txCallback != NULL)
-                this->txCallback();
-            
-            if(!this->bufferSize)
+        case TW_SR_STOP:  /**< Stop or repeated start received */
+            this->stop();  /**< Send stop condition. */
+            this->bufferSize = this->bufferIndex;  /**< Store the received buffer size. */
+            this->bufferIndex = 0;  /**< Reset the buffer index. */
+            if (this->rxCallback != NULL)  /**< If an RX callback function is set */
+                this->rxCallback(this->bufferIndex);  /**< Call the RX callback. */
+            this->releaseBus();  /**< Release the bus for other devices. */
+            break;
+
+        case TW_SR_DATA_NACK:  /**< Data received, returned NACK */
+        case TW_SR_GCALL_DATA_NACK:  /**< Data received generally, returned NACK */
+            *this->twcr = TWI_SEND_NACK;  /**< Send NACK to master. */
+            break;
+
+        /* SLAVE TRANSMITTER */
+        case TW_ST_SLA_ACK:  /**< Addressed, returned ACK */
+        case TW_ST_ARB_LOST_SLA_ACK:  /**< Lost arbitration, returned ACK */
+            this->state = TWI_STX;  /**< Set state to slave transmitter. */
+            this->bufferIndex = 0;  /**< Reset buffer index. */
+            this->bufferSize = 0;  /**< Reset buffer size. */
+            if (this->txCallback != NULL)  /**< If a TX callback is set */
+                this->txCallback();  /**< Call the TX callback. */
+
+            if (!this->bufferSize)  /**< If no data is in buffer */
             {
-                this->bufferSize++;
-                this->buffer[0] = 0xFF;
+                this->bufferSize++;  /**< Add a dummy byte to the buffer. */
+                this->buffer[0] = 0xFF;  /**< Store a dummy byte. */
             }
             // NO NEED FOR BRAKE
-        case TW_ST_DATA_ACK:
-            *this->twdr = this->buffer[this->bufferIndex++];
-            if (this->bufferIndex < this->bufferSize)
-                *this->twcr = TWI_SEND_ACK;
-            else
-                *this->twcr = TWI_SEND_NACK;
+        case TW_ST_DATA_ACK:  /**< Data transmitted, returned ACK */
+            *this->twdr = this->buffer[this->bufferIndex++];  /**< Send the next byte from the buffer. */
+            if (this->bufferIndex < this->bufferSize)  /**< If there’s more data to send */
+                *this->twcr = TWI_SEND_ACK;  /**< Send ACK. */
+            else  /**< If no more data to send */
+                *this->twcr = TWI_SEND_NACK;  /**< Send NACK. */
             break;
-        case TW_ST_DATA_NACK: // received nack, we are done 
-        case TW_ST_LAST_DATA: // received ack, but we are done already!
-            *this->twcr = TWI_SEND_ACK;
-            this->state = TWI_READY;
+
+        case TW_ST_DATA_NACK:  /**< Data sent, returned NACK */
+        case TW_ST_LAST_DATA:  /**< Last data sent, returned ACK */
+            *this->twcr = TWI_SEND_ACK;  /**< Send ACK to finalize transmission. */
+            this->state = TWI_READY;  /**< Set state to ready for next transaction. */
             break;
-        // ALL BOTH MASTER AND SLAVE
-        case TW_NO_INFO:
+
+        /* BOTH MASTER AND SLAVE */
+        case TW_NO_INFO:  /**< No information, do nothing */
             break;
-        case TW_BUS_ERROR:
-            this->stop();
+
+        case TW_BUS_ERROR:  /**< Bus error occurred */
+            this->stop();  /**< Send stop condition to recover from error. */
             break;
     }
 }
 
+
+/**
+ * @brief Releases the TWI bus and sets the state to ready.
+ * 
+ * This function acknowledges the current transaction and makes the TWI bus available
+ * for future operations. It sets the TWI interface state to TWI_READY, indicating
+ * that the bus is ready to begin a new communication.
+ * 
+ * @note This function is called when the bus should be released after a transmission.
+ */
 void __TWI__::releaseBus(void)
 {
-    *this->twcr = TWI_SEND_ACK;
-    this->state = TWI_READY;
+    *this->twcr = TWI_SEND_ACK;  //*< Acknowledge current transaction, releasing the bus.
+    this->state = TWI_READY;     //*< Set state to ready for future operations.
 }
 
+
+/**
+ * @brief Sends a stop condition on the TWI bus and waits until the stop condition is completed.
+ * 
+ * This function sends a stop condition to the TWI bus, signaling the end of the communication
+ * and allowing other devices to use the bus. It waits for the stop condition to be fully transmitted
+ * by checking the TWSTO flag in the TWI Control Register. Once the stop condition is finished,
+ * the state is set to TWI_READY to indicate that the bus is ready for future communications.
+ * 
+ * @note This function is typically called to terminate a communication session.
+ */
 void __TWI__::stop(void)
 {
-    *this->twcr = TWI_SEND_STOP;
-    while(*this->twcr & (1 << TWSTO));
-    this->state = TWI_READY;
+    *this->twcr = TWI_SEND_STOP;        //*< Initiate a stop condition.
+    while(*this->twcr & (1 << TWSTO));  //*< Wait until stop condition is finished.
+    this->state = TWI_READY;            //*< Mark the bus as ready for future communication.
 }
+
