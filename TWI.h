@@ -26,7 +26,6 @@
 #define TWI_SEND_STOP         ((1 << TWEN) | (1 << TWIE) | (1 << TWINT) | (1 << TWEA) | (1 << TWSTO))
 #define TWI_END               (const uint8_t)0
 
-
 /**
  * @brief Class for managing TWI (Two-Wire Interface) communication.
  *
